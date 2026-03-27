@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NETWATCH // Network Monitor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+:root {
+–bg:       #080b0f;
+–surface:  #0d1117;
+–border:   #1a2433;
+–green:    #00ff88;
+–green-dim:#00cc6a;
+–green-glow: rgba(0,255,136,0.12);
+–amber:    #ffb300;
+–red:      #ff3b5c;
+–blue:     #38b6ff;
+–text:     #c8d8e8;
+–muted:    #4a6080;
+–mono:     ‘Share Tech Mono’, monospace;
+–sans:     ‘Rajdhani’, sans-serif;
+}
+
+- { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+background: var(–bg);
+color: var(–text);
+font-family: var(–mono);
+font-size: 13px;
+min-height: 100vh;
+overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::before {
+content: ‘’;
+position: fixed; inset: 0;
+background: repeating-linear-gradient(
+0deg,
+transparent,
+transparent 2px,
+rgba(0,0,0,0.08) 2px,
+rgba(0,0,0,0.08) 4px
+);
+pointer-events: none;
+z-index: 9999;
+}
+
+/* ── HEADER ── */
+header {
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding: 12px 20px;
+border-bottom: 1px solid var(–border);
+background: var(–surface);
+position: sticky; top: 0; z-index: 100;
+}
+
+.logo {
+font-family: var(–sans);
+font-size: 22px;
+font-weight: 700;
+letter-spacing: 4px;
+color: var(–green);
+text-shadow: 0 0 20px var(–green-glow);
+}
+.logo span { color: var(–muted); font-weight: 400; }
+
+.header-right {
+display: flex;
+align-items: center;
+gap: 20px;
+}
+
+.status-indicator {
+display: flex;
+align-items: center;
+gap: 8px;
+font-size: 11px;
+color: var(–muted);
+letter-spacing: 1px;
+}
+.dot {
+width: 8px; height: 8px;
+border-radius: 50%;
+background: var(–green);
+box-shadow: 0 0 8px var(–green);
+animation: pulse 2s infinite;
+}
+@keyframes pulse {
+0%,100% { opacity:1; box-shadow: 0 0 8px var(–green); }
+50%      { opacity:.5; box-shadow: 0 0 3px var(–green); }
+}
+
+#clock {
+font-size: 14px;
+color: var(–green);
+letter-spacing: 2px;
+}
+
+/* ── MAIN GRID ── */
+.grid {
+display: grid;
+grid-template-columns: 220px 1fr 1fr;
+grid-template-rows: auto auto 1fr;
+gap: 1px;
+background: var(–border);
+min-height: calc(100vh - 50px);
+}
+
+.panel {
+background: var(–surface);
+padding: 16px;
+overflow: hidden;
+}
+
+.panel-label {
+font-family: var(–sans);
+font-size: 10px;
+font-weight: 700;
+letter-spacing: 3px;
+color: var(–muted);
+text-transform: uppercase;
+margin-bottom: 14px;
+padding-bottom: 8px;
+border-bottom: 1px solid var(–border);
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+.panel-label .tag {
+background: var(–border);
+color: var(–green);
+font-size: 9px;
+padding: 2px 6px;
+border-radius: 2px;
+letter-spacing: 1px;
+}
+
+/* ── SIDEBAR: INTERFACES ── */
+.sidebar {
+grid-row: 1 / -1;
+}
+
+.iface {
+padding: 10px;
+margin-bottom: 8px;
+border: 1px solid var(–border);
+border-radius: 2px;
+cursor: pointer;
+transition: all 0.15s;
+position: relative;
+overflow: hidden;
+}
+.iface::before {
+content: ‘’;
+position: absolute;
+left: 0; top: 0; bottom: 0;
+width: 2px;
+background: transparent;
+transition: background 0.15s;
+}
+.iface:hover, .iface.active {
+border-color: var(–green);
+background: var(–green-glow);
+}
+.iface:hover::before, .iface.active::before {
+background: var(–green);
+}
+
+.iface-name {
+font-family: var(–sans);
+font-size: 14px;
+font-weight: 700;
+color: var(–text);
+letter-spacing: 1px;
+margin-bottom: 4px;
+}
+.iface-ip {
+color: var(–green-dim);
+font-size: 11px;
+margin-bottom: 6px;
+}
+.iface-stats {
+display: flex;
+gap: 10px;
+font-size: 10px;
+color: var(–muted);
+}
+.iface-badge {
+display: inline-block;
+font-size: 9px;
+padding: 1px 5px;
+border-radius: 1px;
+margin-bottom: 6px;
+letter-spacing: 1px;
+font-family: var(–sans);
+font-weight: 700;
+}
+.badge-up   { background: rgba(0,255,136,.15); color: var(–green); }
+.badge-down { background: rgba(255,59,92,.15);  color: var(–red);   }
+
+/* ── BANDWIDTH CHART ── */
+.chart-wrap {
+grid-column: 2 / 4;
+position: relative;
+}
+
+canvas#bw-chart {
+width: 100%;
+height: 120px;
+display: block;
+}
+
+.chart-legend {
+display: flex;
+gap: 20px;
+margin-top: 8px;
+font-size: 11px;
+}
+.legend-item {
+display: flex;
+align-items: center;
+gap: 6px;
+color: var(–muted);
+}
+.legend-swatch {
+width: 16px; height: 2px;
+border-radius: 1px;
+}
+
+/* ── STATS CARDS ── */
+.stats-row {
+grid-column: 2 / 4;
+display: grid;
+grid-template-columns: repeat(4, 1fr);
+gap: 1px;
+background: var(–border);
+padding: 0;
+}
+.stat-card {
+background: var(–surface);
+padding: 14px 16px;
+}
+.stat-label {
+font-size: 9px;
+color: var(–muted);
+letter-spacing: 2px;
+text-transform: uppercase;
+font-family: var(–sans);
+font-weight: 600;
+margin-bottom: 6px;
+}
+.stat-value {
+font-size: 24px;
+font-family: var(–sans);
+font-weight: 700;
+letter-spacing: 1px;
+line-height: 1;
+}
+.stat-unit {
+font-size: 11px;
+color: var(–muted);
+margin-top: 2px;
+}
+.v-green { color: var(–green); }
+.v-amber { color: var(–amber); }
+.v-red   { color: var(–red);   }
+.v-blue  { color: var(–blue);  }
+
+/* ── CONNECTIONS TABLE ── */
+.connections { grid-column: 2 / 3; }
+.dns-panel   { grid-column: 3 / 4; }
+
+table {
+width: 100%;
+border-collapse: collapse;
+font-size: 11px;
+}
+thead th {
+text-align: left;
+font-family: var(–sans);
+font-weight: 700;
+font-size: 9px;
+letter-spacing: 2px;
+color: var(–muted);
+text-transform: uppercase;
+padding: 4px 6px 8px;
+border-bottom: 1px solid var(–border);
+}
+tbody tr {
+border-bottom: 1px solid rgba(26,36,51,.5);
+transition: background 0.1s;
+cursor: default;
+}
+tbody tr:hover { background: rgba(0,255,136,.04); }
+tbody td {
+padding: 6px 6px;
+color: var(–text);
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+max-width: 140px;
+}
+.proto {
+font-size: 9px;
+padding: 1px 5px;
+border-radius: 1px;
+font-family: var(–sans);
+font-weight: 700;
+letter-spacing: 1px;
+}
+.p-tcp  { background: rgba(56,182,255,.15); color: var(–blue); }
+.p-udp  { background: rgba(255,179,0,.15);  color: var(–amber); }
+.p-icmp { background: rgba(0,255,136,.15);  color: var(–green); }
+.state  { font-size: 10px; }
+.s-est  { color: var(–green); }
+.s-tw   { color: var(–muted); }
+.s-lst  { color: var(–amber); }
+
+/* ── DNS LOG ── */
+.dns-entry {
+display: flex;
+justify-content: space-between;
+align-items: baseline;
+padding: 5px 0;
+border-bottom: 1px solid rgba(26,36,51,.5);
+font-size: 11px;
+gap: 8px;
+}
+.dns-host { color: var(–text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dns-type { color: var(–blue); font-size: 9px; font-family: var(–sans); font-weight: 700; letter-spacing: 1px; min-width: 32px; }
+.dns-ms   { color: var(–muted); font-size: 10px; min-width: 36px; text-align: right; }
+
+/* ── PING BARS ── */
+.ping-rows { display: flex; flex-direction: column; gap: 8px; }
+.ping-row  { display: flex; align-items: center; gap: 10px; }
+.ping-host { color: var(–muted); font-size: 11px; min-width: 120px; }
+.ping-bar-wrap {
+flex: 1;
+height: 6px;
+background: var(–border);
+border-radius: 1px;
+overflow: hidden;
+}
+.ping-bar {
+height: 100%;
+border-radius: 1px;
+transition: width 1s ease;
+}
+.ping-val { font-size: 11px; min-width: 40px; text-align: right; }
+
+/* ── ALERTS ── */
+.alerts { grid-column: 2 / 4; }
+.alert-log {
+display: flex;
+flex-direction: column;
+gap: 4px;
+max-height: 100px;
+overflow-y: auto;
+}
+.alert-log::-webkit-scrollbar { width: 3px; }
+.alert-log::-webkit-scrollbar-thumb { background: var(–border); }
+.alert-entry {
+display: flex;
+gap: 10px;
+align-items: baseline;
+font-size: 11px;
+padding: 4px 8px;
+border-left: 2px solid transparent;
+animation: slideIn 0.3s ease;
+}
+@keyframes slideIn {
+from { opacity:0; transform: translateX(-8px); }
+to   { opacity:1; transform: translateX(0); }
+}
+.alert-time  { color: var(–muted); min-width: 60px; font-size: 10px; }
+.alert-msg   { color: var(–text); }
+.a-info  { border-color: var(–blue);  background: rgba(56,182,255,.04); }
+.a-warn  { border-color: var(–amber); background: rgba(255,179,0,.04); }
+.a-crit  { border-color: var(–red);   background: rgba(255,59,92,.04); }
+.alert-lvl { font-size: 9px; font-family: var(–sans); font-weight: 700; letter-spacing: 1px; min-width: 36px; }
+.lvl-info { color: var(–blue); }
+.lvl-warn { color: var(–amber); }
+.lvl-crit { color: var(–red); }
+
+/* ── GAUGE ── */
+.gauges {
+display: flex;
+gap: 20px;
+justify-content: space-around;
+padding: 8px 0;
+}
+.gauge-wrap { text-align: center; }
+.gauge-label {
+font-size: 9px;
+color: var(–muted);
+letter-spacing: 2px;
+text-transform: uppercase;
+font-family: var(–sans);
+font-weight: 600;
+margin-top: 6px;
+}
+svg.gauge circle { fill: none; }
+.gauge-val {
+font-family: var(–sans);
+font-weight: 700;
+font-size: 15px;
+fill: var(–text);
+}
+.gauge-pct {
+font-size: 10px;
+fill: var(–muted);
+}
+
+.scroll-area {
+max-height: 220px;
+overflow-y: auto;
+}
+.scroll-area::-webkit-scrollbar { width: 3px; }
+.scroll-area::-webkit-scrollbar-thumb { background: var(–border); }
+
+/* Responsive compaction */
+@media (max-width: 900px) {
+.grid { grid-template-columns: 1fr 1fr; }
+.sidebar { grid-row: auto; }
+.chart-wrap, .stats-row, .alerts { grid-column: 1 / -1; }
+.connections, .dns-panel { grid-column: auto; }
+.stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+
+</head>
+<body>
+
+<header>
+  <div class="logo">NET<span>WATCH</span></div>
+  <div class="header-right">
+    <div class="status-indicator"><div class="dot"></div> MONITORING ACTIVE</div>
+    <div id="clock">--:--:--</div>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- ── SIDEBAR ── -->
+
+  <div class="panel sidebar">
+    <div class="panel-label">Interfaces <span class="tag">LIVE</span></div>
+    <div id="ifaces"></div>
+  </div>
+
+  <!-- ── BANDWIDTH CHART ── -->
+
+  <div class="panel chart-wrap">
+    <div class="panel-label">Bandwidth <span class="tag">60s</span></div>
+    <canvas id="bw-chart"></canvas>
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div> RX (recv)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--blue)"></div> TX (send)</div>
+      <span style="margin-left:auto;color:var(--muted);font-size:10px" id="bw-peak"></span>
+    </div>
+  </div>
+
+  <!-- ── GAUGES ── -->
+
+  <div class="panel">
+    <div class="panel-label">System Load</div>
+    <div class="gauges" id="gauges"></div>
+  </div>
+
+  <!-- ── STAT CARDS ── -->
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">RX Speed</div>
+      <div class="stat-value v-green" id="s-rx">0</div>
+      <div class="stat-unit" id="s-rx-u">Mbps</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">TX Speed</div>
+      <div class="stat-value v-blue" id="s-tx">0</div>
+      <div class="stat-unit" id="s-tx-u">Mbps</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active Conns</div>
+      <div class="stat-value v-amber" id="s-conns">0</div>
+      <div class="stat-unit">connections</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Packet Loss</div>
+      <div class="stat-value v-red" id="s-loss">0.0</div>
+      <div class="stat-unit">percent</div>
+    </div>
+  </div>
+
+  <!-- ── CONNECTIONS ── -->
+
+  <div class="panel connections">
+    <div class="panel-label">Active Connections <span class="tag" id="conn-count">0</span></div>
+    <div class="scroll-area">
+      <table>
+        <thead>
+          <tr><th>Proto</th><th>Local</th><th>Remote</th><th>Port</th><th>State</th></tr>
+        </thead>
+        <tbody id="conn-table"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── DNS LOG ── -->
+
+  <div class="panel dns-panel">
+    <div class="panel-label">DNS Queries <span class="tag">RECENT</span></div>
+    <div class="scroll-area">
+      <div id="dns-log"></div>
+    </div>
+  </div>
+
+  <!-- ── PING ── -->
+
+  <div class="panel">
+    <div class="panel-label">Ping Latency <span class="tag">ms</span></div>
+    <div class="ping-rows" id="ping-rows"></div>
+  </div>
+
+  <!-- ── ALERTS ── -->
+
+  <div class="panel alerts">
+    <div class="panel-label">Event Log <span class="tag" id="alert-count">0</span></div>
+    <div class="alert-log" id="alert-log"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── DATA SIMULATION ─────────────────────────────────────────
+
+const INTERFACES = [
+  { name: 'eth0',  ip: '192.168.1.105', mac:'a4:5e:60:b1:22:3f', type:'Ethernet', up:true  },
+  { name: 'wlan0', ip: '192.168.1.106', mac:'dc:a6:32:4f:11:ab', type:'WiFi 6',   up:true  },
+  { name: 'tun0',  ip: '10.8.0.2',      mac:'--',                type:'VPN',      up:false },
+  { name: 'lo',    ip: '127.0.0.1',     mac:'00:00:00:00:00:00', type:'Loopback', up:true  },
+];
+
+const PING_HOSTS = [
+  { host: '8.8.8.8 (Google)', base: 12 },
+  { host: '1.1.1.1 (CF)',     base: 9  },
+  { host: 'gateway (router)', base: 2  },
+  { host: 'synology.local',   base: 1  },
+];
+
+const FAKE_REMOTES = [
+  '142.250.80.46','172.217.14.196','140.82.121.4',
+  '52.26.198.100','104.16.88.20','151.101.1.69',
+  '185.199.108.154','31.13.71.36','216.58.214.174',
+];
+const FAKE_HOSTS = [
+  'photos.google.com','api.github.com','ocsp.apple.com',
+  'telemetry.microsoft.com','cdn.cloudflare.com','docs.synology.com',
+  'api.dropbox.com','time.cloudflare.com','services.amazon.com',
+  'push.apple.com','fonts.googleapis.com','update.microsoft.com',
+];
+const STATES  = ['ESTABLISHED','TIME_WAIT','LISTEN'];
+const PROTOS  = ['TCP','TCP','TCP','UDP','ICMP'];
+
+let bwHistory = { rx: new Array(60).fill(0), tx: new Array(60).fill(0) };
+let alertCount = 0;
+let connData = [];
+let dnsEntries = [];
+let pingVals  = PING_HOSTS.map(h => ({ ...h, ms: h.base + Math.random() * 3 }));
+let ifaceStats = INTERFACES.map(i => ({
+  ...i,
+  rx: +(Math.random()*500).toFixed(1),
+  tx: +(Math.random()*200).toFixed(1)
+}));
+
+// ─── CLOCK ───────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── INTERFACES ──────────────────────────────────────────────
+function renderInterfaces() {
+  const el = document.getElementById('ifaces');
+  el.innerHTML = ifaceStats.map((iface,i) => `
+    <div class="iface ${i===0?'active':''}" onclick="selectIface(this)">
+      <div class="iface-badge ${iface.up?'badge-up':'badge-down'}">${iface.up?'UP':'DOWN'}</div>
+      <div class="iface-name">${iface.name}</div>
+      <div class="iface-ip">${iface.ip}</div>
+      <div class="iface-stats">
+        <span>↓ ${iface.rx} Mbps</span>
+        <span>↑ ${iface.tx} Mbps</span>
+      </div>
+    </div>
+  `).join('');
+}
+window.selectIface = (el) => {
+  document.querySelectorAll('.iface').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+};
+
+// ─── BANDWIDTH CHART ─────────────────────────────────────────
+const canvas = document.getElementById('bw-chart');
+const ctx    = canvas.getContext('2d');
+
+function drawChart() {
+  const W = canvas.parentElement.clientWidth - 32;
+  const H = 120;
+  canvas.width  = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  ctx.clearRect(0, 0, W, H);
+
+  const maxVal = Math.max(1, ...bwHistory.rx, ...bwHistory.tx);
+  const N = bwHistory.rx.length;
+  const step = W / (N - 1);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(26,36,51,0.8)';
+  ctx.lineWidth = 1;
+  for (let g = 0; g <= 4; g++) {
+    const y = H - (g / 4) * (H - 20) - 4;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(74,96,128,0.6)';
+    ctx.font = '9px Share Tech Mono';
+    ctx.fillText((maxVal * g / 4).toFixed(0) + ' Mbps', 2, y - 2);
+  }
+
+  // RX area
+  ctx.beginPath();
+  bwHistory.rx.forEach((v, i) => {
+    const x = i * step;
+    const y = H - 4 - (v / maxVal) * (H - 24);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo((N-1)*step, H); ctx.lineTo(0, H); ctx.closePath();
+  const gradRX = ctx.createLinearGradient(0, 0, 0, H);
+  gradRX.addColorStop(0, 'rgba(0,255,136,0.25)');
+  gradRX.addColorStop(1, 'rgba(0,255,136,0.02)');
+  ctx.fillStyle = gradRX;
+  ctx.fill();
+  ctx.beginPath();
+  bwHistory.rx.forEach((v, i) => {
+    const x = i * step;
+    const y = H - 4 - (v / maxVal) * (H - 24);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // TX area
+  ctx.beginPath();
+  bwHistory.tx.forEach((v, i) => {
+    const x = i * step;
+    const y = H - 4 - (v / maxVal) * (H - 24);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo((N-1)*step, H); ctx.lineTo(0, H); ctx.closePath();
+  const gradTX = ctx.createLinearGradient(0, 0, 0, H);
+  gradTX.addColorStop(0, 'rgba(56,182,255,0.2)');
+  gradTX.addColorStop(1, 'rgba(56,182,255,0.02)');
+  ctx.fillStyle = gradTX;
+  ctx.fill();
+  ctx.beginPath();
+  bwHistory.tx.forEach((v, i) => {
+    const x = i * step;
+    const y = H - 4 - (v / maxVal) * (H - 24);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#38b6ff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  document.getElementById('bw-peak').textContent =
+    'PEAK RX: ' + Math.max(...bwHistory.rx).toFixed(1) + ' Mbps';
+}
+
+// ─── GAUGES ──────────────────────────────────────────────────
+function makeGauge(label, val, color, max=100) {
+  const r = 32, cx=40, cy=38;
+  const circ = 2 * Math.PI * r;
+  const dashArr = (val / max) * circ;
+  const display = max === 100 ? val.toFixed(0)+'%' : val.toFixed(0)+'ms';
+  return `
+    <div class="gauge-wrap">
+      <svg width="80" height="76" viewBox="0 0 80 76" class="gauge">
+        <circle cx="${cx}" cy="${cy}" r="${r}" stroke="#1a2433" stroke-width="6"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}"
+          stroke="${color}" stroke-width="6"
+          stroke-dasharray="${dashArr} ${circ}"
+          stroke-dashoffset="${circ * 0.25}"
+          stroke-linecap="butt"
+          transform="rotate(-90 ${cx} ${cy})"
+          style="transition: stroke-dasharray 1s ease"
+        />
+        <text x="${cx}" y="${cy+4}" text-anchor="middle" class="gauge-val" font-family="Rajdhani,sans-serif" font-size="14" font-weight="700" fill="${color}">${display}</text>
+      </svg>
+      <div class="gauge-label">${label}</div>
+    </div>`;
+}
+
+let gaugeState = { cpu: 22, mem: 61, disk: 48 };
+function renderGauges() {
+  document.getElementById('gauges').innerHTML =
+    makeGauge('CPU', gaugeState.cpu, '#00ff88') +
+    makeGauge('MEM', gaugeState.mem, '#ffb300') +
+    makeGauge('DISK I/O', gaugeState.disk, '#38b6ff');
+}
+
+// ─── CONNECTIONS TABLE ────────────────────────────────────────
+function genConnections() {
+  const n = 12 + Math.floor(Math.random() * 6);
+  connData = [];
+  for (let i = 0; i < n; i++) {
+    const proto = PROTOS[Math.floor(Math.random() * PROTOS.length)];
+    const state = proto === 'UDP' ? '—' : STATES[Math.floor(Math.random() * STATES.length)];
+    const localPort = [443,80,22,8080,3000,5900][Math.floor(Math.random()*6)];
+    const remPort   = 1024 + Math.floor(Math.random() * 60000);
+    connData.push({
+      proto,
+      local: '192.168.1.105',
+      remote: FAKE_REMOTES[Math.floor(Math.random() * FAKE_REMOTES.length)],
+      port: proto === 'ICMP' ? '—' : remPort,
+      localPort,
+      state
+    });
+  }
+}
+
+function renderConnections() {
+  const stateClass = { ESTABLISHED:'s-est', TIME_WAIT:'s-tw', LISTEN:'s-lst' };
+  const protoClass = { TCP:'p-tcp', UDP:'p-udp', ICMP:'p-icmp' };
+  document.getElementById('conn-table').innerHTML = connData.map(c => `
+    <tr>
+      <td><span class="proto ${protoClass[c.proto]||'p-tcp'}">${c.proto}</span></td>
+      <td>${c.local}:${c.localPort}</td>
+      <td title="${c.remote}">${c.remote}</td>
+      <td>${c.port}</td>
+      <td class="state ${stateClass[c.state]||'s-tw'}">${c.state}</td>
+    </tr>
+  `).join('');
+  document.getElementById('conn-count').textContent = connData.length;
+  document.getElementById('s-conns').textContent = connData.length;
+}
+
+// ─── DNS LOG ─────────────────────────────────────────────────
+const DNS_TYPES = ['A','AAAA','CNAME','MX','TXT'];
+function addDNS() {
+  const host = FAKE_HOSTS[Math.floor(Math.random() * FAKE_HOSTS.length)];
+  const type = DNS_TYPES[Math.floor(Math.random() * DNS_TYPES.length)];
+  const ms   = (5 + Math.random() * 80).toFixed(0);
+  dnsEntries.unshift({ host, type, ms });
+  if (dnsEntries.length > 30) dnsEntries.pop();
+  document.getElementById('dns-log').innerHTML = dnsEntries.map(d => `
+    <div class="dns-entry">
+      <span class="dns-host">${d.host}</span>
+      <span class="dns-type">${d.type}</span>
+      <span class="dns-ms">${d.ms}ms</span>
+    </div>
+  `).join('');
+}
+
+// ─── PING ────────────────────────────────────────────────────
+function updatePings() {
+  pingVals = pingVals.map(p => ({
+    ...p,
+    ms: Math.max(1, p.base + Math.random() * 15 + (Math.random() > 0.9 ? 80 : 0))
+  }));
+  const maxMs = 150;
+  document.getElementById('ping-rows').innerHTML = pingVals.map(p => {
+    const pct = Math.min(100, (p.ms / maxMs) * 100);
+    const color = p.ms < 20 ? 'var(--green)' : p.ms < 60 ? 'var(--amber)' : 'var(--red)';
+    return `
+      <div class="ping-row">
+        <div class="ping-host">${p.host}</div>
+        <div class="ping-bar-wrap"><div class="ping-bar" style="width:${pct}%;background:${color}"></div></div>
+        <div class="ping-val" style="color:${color}">${p.ms.toFixed(1)}ms</div>
+      </div>`;
+  }).join('');
+}
+
+// ─── ALERTS ──────────────────────────────────────────────────
+const ALERT_MSGS = [
+  { lvl:'INFO', msg:'Interface eth0 RX exceeded 80 Mbps' },
+  { lvl:'WARN', msg:'High latency detected: 8.8.8.8 > 100ms' },
+  { lvl:'INFO', msg:'New connection from 185.199.108.154:443' },
+  { lvl:'WARN', msg:'DNS timeout: telemetry.microsoft.com' },
+  { lvl:'CRIT', msg:'Packet loss spike: 3.2% on eth0' },
+  { lvl:'INFO', msg:'wlan0 signal strength: -62 dBm' },
+  { lvl:'INFO', msg:'SSH connection established: 10.8.0.5' },
+  { lvl:'WARN', msg:'Unusual outbound traffic on port 4444' },
+];
+
+function addAlert() {
+  if (Math.random() > 0.4) return;
+  const a = ALERT_MSGS[Math.floor(Math.random() * ALERT_MSGS.length)];
+  const now = new Date().toTimeString().slice(0,8);
+  const lvlClass = { INFO:'a-info', WARN:'a-warn', CRIT:'a-crit' };
+  const lvlLbl   = { INFO:'lvl-info', WARN:'lvl-warn', CRIT:'lvl-crit' };
+  const entry = document.createElement('div');
+  entry.className = `alert-entry ${lvlClass[a.lvl]}`;
+  entry.innerHTML = `
+    <span class="alert-time">${now}</span>
+    <span class="alert-lvl ${lvlLbl[a.lvl]}">[${a.lvl}]</span>
+    <span class="alert-msg">${a.msg}</span>`;
+  const log = document.getElementById('alert-log');
+  log.prepend(entry);
+  while (log.children.length > 20) log.removeChild(log.lastChild);
+  alertCount++;
+  document.getElementById('alert-count').textContent = alertCount;
+}
+
+// ─── STAT CARDS ──────────────────────────────────────────────
+function fmt(v) {
+  if (v >= 1000) return { val: (v/1000).toFixed(2), unit: 'Gbps' };
+  return { val: v.toFixed(1), unit: 'Mbps' };
+}
+function updateStats() {
+  const rx = bwHistory.rx[bwHistory.rx.length-1];
+  const tx = bwHistory.tx[bwHistory.tx.length-1];
+  const fr = fmt(rx), ft = fmt(tx);
+  document.getElementById('s-rx').textContent = fr.val;
+  document.getElementById('s-rx-u').textContent = fr.unit;
+  document.getElementById('s-tx').textContent = ft.val;
+  document.getElementById('s-tx-u').textContent = ft.unit;
+  const loss = Math.random() > 0.95 ? (Math.random()*3).toFixed(1) : '0.0';
+  document.getElementById('s-loss').textContent = loss;
+  if (parseFloat(loss) > 1) document.getElementById('s-loss').className = 'stat-value v-red';
+  else document.getElementById('s-loss').className = 'stat-value v-green';
+}
+
+// ─── MASTER TICK ─────────────────────────────────────────────
+let tick = 0;
+function masterTick() {
+  tick++;
+
+  // Bandwidth
+  const rx = Math.max(0, 5 + Math.sin(tick*0.1)*30 + Math.random()*20);
+  const tx = Math.max(0, 2 + Math.cos(tick*0.08)*15 + Math.random()*10);
+  bwHistory.rx.shift(); bwHistory.rx.push(+rx.toFixed(2));
+  bwHistory.tx.shift(); bwHistory.tx.push(+tx.toFixed(2));
+
+  // Gauges drift
+  gaugeState.cpu  = Math.min(99, Math.max(2,  gaugeState.cpu  + (Math.random()-0.48)*4));
+  gaugeState.mem  = Math.min(95, Math.max(30, gaugeState.mem  + (Math.random()-0.5 )*2));
+  gaugeState.disk = Math.min(95, Math.max(0,  gaugeState.disk + (Math.random()-0.5 )*8));
+
+  // Iface speeds
+  ifaceStats = ifaceStats.map(i => i.up ? {
+    ...i,
+    rx: +(Math.random()*500).toFixed(1),
+    tx: +(Math.random()*200).toFixed(1)
+  } : i);
+
+  // Renders
+  drawChart();
+  renderInterfaces();
+  renderGauges();
+  updateStats();
+  updatePings();
+  addAlert();
+
+  if (tick % 5 === 0) { genConnections(); renderConnections(); }
+  if (tick % 3 === 0) addDNS();
+}
+
+// Init
+genConnections();
+renderConnections();
+renderInterfaces();
+renderGauges();
+updatePings();
+drawChart();
+for (let i=0; i<5; i++) addDNS();
+
+setInterval(masterTick, 1200);
+window.addEventListener('resize', drawChart);
+</script>
+
+</body>
+</html>
